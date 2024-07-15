@@ -1,5 +1,5 @@
 ---
-- name: Installation NGINX
+- name: Install nginx
   hosts: lighthouse
   handlers:
     - name: Start-nginx
@@ -23,7 +23,7 @@
       ansible.builtin.yum:
         name: nginx
         state: present
-    - name: nhinx ----- Creating config
+    - name: nginx ----- Creating config
       become: true
       ansible.builtin.template:
         src: templates/nginx.j2
@@ -59,6 +59,7 @@
       notify: reload-nginx
 
 - name: Install Clickhouse
+  tags: clickhouse
   hosts: clickhouse
   handlers:
     - name: Start clickhouse service
@@ -68,7 +69,6 @@
         state: restarted
   tasks:
     - name: Clickhouse ----- Installing Clickhouse
-      tags: clickhouse
       block:
         - name: Clickhouse ----- Downloading clickhouse distrib
           ansible.builtin.get_url:
@@ -89,17 +89,17 @@
           - clickhouse-common-static-{{ clickhouse_version }}.rpm
           - clickhouse-client-{{ clickhouse_version }}.rpm
           - clickhouse-server-{{ clickhouse_version }}.rpm
-      tags: clickhouse
-      notify: Starting clickhouse service
+      notify: Start clickhouse service
     - name: Flush handlers
-      ansible.legacy.meta: flush_handlers
+      ansible.builtin.meta: flush_handlers
     - name: Clickhouse ----- Creating database
       ansible.builtin.command: "clickhouse-client -q 'create database logs;'"
       register: create_db
       failed_when: create_db.rc != 0 and create_db.rc != 82
       changed_when: create_db.rc == 0
-      tags: clickhouse
+
 - name: Vector ----- Installing Vector
+  tags: vector
   hosts: vector
   handlers:
     - name: Restart vector service
@@ -113,31 +113,26 @@
         url: "https://packages.timber.io/vector/{{ vector_version }}/vector-{{ vector_version }}-1.x86_64.rpm"
         dest: "./vector-{{ vector_version }}.rpm"
         mode: 0644
-      tags: vector
     - name: Install Vector 
       become: true
       ansible.builtin.yum:
         name:
           - vector-{{ vector_version }}.rpm
-      tags: vector
     - name: Vector ----- creating vector config
       become: true
       ansible.builtin.file:
         path: "{{ vector_conf_dir }}"
         state: directory
         mode: 0644
-      tags: vector
     - name: Vector ----- apply vector template
       become: true
       ansible.builtin.template:
         src: "templates/vector.j2"
         dest: "{{ vector_conf_dir }}/vector.yml"
         mode: "0644"
-      tags: vector
       notify: Restart vector service
     - name: Flush handlers
       ansible.legacy.meta: flush_handlers
-
     - name: Vector ----- create systemd
       become: true
       ansible.builtin.template:
